@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Webcam Data Review</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f4f6f9;
+    }
+
+    .badge-verified {
+      background: #198754;
+    }
+
+    .badge-unverified {
+      background: #dc3545;
+    }
+
+    .badge-auto {
+      background: #0d6efd;
+    }
+
+    .badge-manual {
+      background: #ffc107;
+      color: #333;
+    }
+
+    .copy-btn {
+      cursor: pointer;
+    }
+
+    #record-nav .btn {
+      min-width: 90px;
+    }
+
+    .field-label {
+      font-weight: 600;
+      color: #495057;
+      font-size: .85rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .stat-pill {
+      font-size: .8rem;
+    }
+
+    .union-words {
+      background: #e9ecef;
+      border-radius: .375rem;
+      padding: .5rem .75rem;
+      font-family: monospace;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .union-words span {
+      flex: 1;
+    }
+
+    .info-card {
+      background: #fff;
+      border-radius: .5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+    }
+
+    .country-header {
+      background: linear-gradient(135deg, #0d6efd, #6610f2);
+      color: #fff;
+      border-radius: .5rem .5rem 0 0;
+    }
+
+    .window-panel {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: .375rem;
+      padding: 1rem;
+    }
+
+    .window-panel .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: .4rem;
+    }
+
+    .window-panel .status-dot.open {
+      background: #198754;
+    }
+
+    .window-panel .status-dot.closed {
+      background: #dc3545;
+    }
+
+    .window-url {
+      font-size: .8rem;
+      color: #6c757d;
+      word-break: break-all;
+      max-height: 2.4em;
+      overflow: hidden;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Top bar -->
+  <nav class="navbar navbar-dark bg-dark mb-3">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1"><i class="bi bi-camera-video"></i> Webcam Data Review</span>
+      <div class="d-flex align-items-center gap-3">
+        <span id="stats-bar" class="text-light small"></span>
+        <label class="btn btn-outline-light btn-sm mb-0">
+          <i class="bi bi-folder2-open"></i> Load JSON
+          <input type="file" id="file-input" accept=".json" class="d-none">
+        </label>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-4" id="app" style="display:none;">
+    <div class="row g-3">
+      <!-- LEFT PANEL -->
+      <div class="col-lg-5 col-xl-4">
+        <div class="info-card">
+          <!-- Country header -->
+          <div class="country-header px-3 py-2 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0" id="country-name">—</h5>
+            <span class="badge bg-light text-dark" id="record-counter">0 / 0</span>
+          </div>
+
+          <div class="p-3">
+            <!-- Navigation -->
+            <div id="record-nav" class="d-flex gap-2 mb-3">
+              <button class="btn btn-outline-secondary btn-sm" onclick="prevCountry()" title="Previous country"><i
+                  class="bi bi-skip-backward-fill"></i></button>
+              <button class="btn btn-outline-primary btn-sm" onclick="prevRecord()"><i class="bi bi-chevron-left"></i>
+                Prev</button>
+              <button class="btn btn-outline-primary btn-sm" onclick="nextRecord()">Next <i
+                  class="bi bi-chevron-right"></i></button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="nextCountry()" title="Next country"><i
+                  class="bi bi-skip-forward-fill"></i></button>
+              <button class="btn btn-outline-warning btn-sm ms-auto" onclick="jumpToNextUnverified()"
+                title="Jump to next unverified"><i class="bi bi-exclamation-triangle"></i> Next Unverified</button>
+            </div>
+
+            <!-- Status badges -->
+            <div class="d-flex gap-2 mb-3">
+              <span class="badge stat-pill" id="mode-badge">—</span>
+              <span class="badge stat-pill" id="verified-badge">—</span>
+            </div>
+
+            <!-- Editable fields -->
+            <div class="mb-2">
+              <label class="field-label">Title</label>
+              <input type="text" class="form-control form-control-sm" id="field-title">
+            </div>
+            <div class="mb-2">
+              <label class="field-label">Subtitle</label>
+              <input type="text" class="form-control form-control-sm" id="field-subtitle">
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-4">
+                <label class="field-label">Radius (m)</label>
+                <input type="number" class="form-control form-control-sm" id="field-radius">
+              </div>
+              <div class="col">
+                <label class="field-label">Latitude</label>
+                <input type="number" step="any" class="form-control form-control-sm" id="field-lat">
+              </div>
+              <div class="col">
+                <label class="field-label">Longitude</label>
+                <input type="number" step="any" class="form-control form-control-sm" id="field-lng">
+              </div>
+              <div class="col-auto d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm" onclick="copyCoords()" title="Copy lat, lng"><i
+                    class="bi bi-clipboard"></i></button>
+              </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="field-label">Mode</label>
+              <select class="form-select form-select-sm" id="field-mode">
+                <option value="automatic">automatic</option>
+                <option value="manual">manual</option>
+              </select>
+            </div>
+
+            <!-- URL (read only) -->
+            <div class="mb-3">
+              <label class="field-label">URL</label>
+              <div class="input-group input-group-sm">
+                <input type="text" class="form-control" id="field-url">
+                <button class="btn btn-outline-secondary" onclick="copyText(document.getElementById('field-url').value)"
+                  title="Copy URL"><i class="bi bi-clipboard"></i></button>
+              </div>
+            </div>
+
+            <!-- Union words -->
+            <div class="mb-3">
+              <label class="field-label">Common Words (title ∩ subtitle)</label>
+              <div class="union-words">
+                <span id="union-words-text">—</span>
+                <button class="btn btn-sm btn-outline-secondary copy-btn"
+                  onclick="copyText(document.getElementById('union-words-text').textContent)" title="Copy words"><i
+                    class="bi bi-clipboard"></i></button>
+              </div>
+            </div>
+
+            <!-- Action buttons -->
+            <div class="d-flex gap-2">
+              <button class="btn btn-success btn-sm flex-fill" onclick="verifyRecord()"><i
+                  class="bi bi-check-circle"></i> Verify</button>
+              <button class="btn btn-danger btn-sm flex-fill" onclick="unverifyRecord()"><i class="bi bi-x-circle"></i>
+                Unverify</button>
+            </div>
+            <div class="d-flex gap-2 mt-2">
+              <button class="btn btn-primary flex-fill" onclick="saveAll()"><i class="bi bi-download"></i> Save
+                JSON</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Jump to record -->
+        <div class="info-card mt-3 p-3">
+          <div class="row g-2 align-items-end">
+            <div class="col">
+              <label class="field-label">Jump to country</label>
+              <select class="form-select form-select-sm" id="jump-country" onchange="jumpToCountry()"></select>
+            </div>
+            <div class="col-auto">
+              <label class="field-label">Record #</label>
+              <input type="number" class="form-control form-control-sm" id="jump-index" min="1" style="width:70px">
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-sm btn-outline-primary" onclick="jumpToIndex()">Go</button>
+            </div>
+          </div>
+          <div class="mt-2 small text-muted" id="progress-info"></div>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL - popup window controls -->
+      <div class="col-lg-7 col-xl-8">
+        <div class="row g-3">
+          <!-- Google Maps window -->
+          <div class="col-12">
+            <div class="window-panel">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <div>
+                  <label class="field-label mb-0"><i class="bi bi-geo-alt-fill text-danger"></i> Google Maps</label>
+                  <span class="ms-2 small"><span class="status-dot closed" id="maps-status-dot"></span><span
+                      id="maps-status-text">Closed</span></span>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-primary" onclick="openMapsWindow()"
+                    title="Open / refresh Google Maps window"><i class="bi bi-box-arrow-up-right"></i> Open</button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="updateMapsFromFields()"
+                    title="Refresh with edited lat/lng"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                  <div class="form-check form-switch d-flex align-items-center ms-2 mb-0">
+                    <input class="form-check-input" type="checkbox" id="maps-auto-update" checked>
+                    <label class="form-check-label small ms-1" for="maps-auto-update">Auto-update</label>
+                  </div>
+                </div>
+              </div>
+              <div class="window-url" id="maps-current-url">No coordinates available</div>
+            </div>
+          </div>
+
+          <!-- Webcam window -->
+          <div class="col-12">
+            <div class="window-panel">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <div>
+                  <label class="field-label mb-0"><i class="bi bi-camera-video-fill text-info"></i> Webcam Feed</label>
+                  <span class="ms-2 small"><span class="status-dot closed" id="webcam-status-dot"></span><span
+                      id="webcam-status-text">Closed</span></span>
+                </div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-primary" onclick="openWebcamWindow()"
+                    title="Open / refresh webcam window"><i class="bi bi-box-arrow-up-right"></i> Open</button>
+                  <div class="form-check form-switch d-flex align-items-center ms-2 mb-0">
+                    <input class="form-check-input" type="checkbox" id="webcam-auto-update" checked>
+                    <label class="form-check-label small ms-1" for="webcam-auto-update">Auto-update</label>
+                  </div>
+                </div>
+              </div>
+              <div class="window-url" id="webcam-current-url">No URL loaded</div>
+            </div>
+          </div>
+
+          <!-- Quick info -->
+          <div class="col-12">
+            <div class="window-panel">
+              <p class="small text-muted mb-0">
+                <i class="bi bi-info-circle"></i>
+                Google Maps and the webcam feed open in <strong>separate browser windows</strong> for the full
+                experience.
+                With <strong>Auto-update</strong> enabled, they navigate automatically as you step through records.
+                Use keyboard shortcuts: <kbd>←</kbd> <kbd>→</kbd> to navigate, <kbd>v</kbd> to verify.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- No file loaded prompt -->
+  <div class="container text-center mt-5" id="no-file">
+    <div class="info-card p-5 mx-auto" style="max-width:500px;">
+      <i class="bi bi-file-earmark-arrow-up" style="font-size:3rem;color:#6c757d;"></i>
+      <h4 class="mt-3">Load your data</h4>
+      <p class="text-muted">Click <strong>Load JSON</strong> in the top bar to open
+        <code>skyline_webcams_final.json</code>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    let allData = {};
+    let countries = [];
+    let countryIdx = 0;
+    let recordIdx = 0;
+    let totalRecords = 0;
+
+    // Managed popup windows
+    let mapsWindow = null;
+    let webcamWindow = null;
+
+    const STOPWORDS = new Set(["skylinewebcams", "cam", "cams", "live", "in", "-", "–", "|"]);
+
+    // ---- File loading ----
+    document.getElementById("file-input").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          allData = JSON.parse(ev.target.result);
+          countries = Object.keys(allData);
+          totalRecords = countries.reduce((sum, c) => sum + allData[c].length, 0);
+          countryIdx = 0;
+          recordIdx = 0;
+          populateJumpCountry();
+          showRecord();
+          document.getElementById("app").style.display = "";
+          document.getElementById("no-file").style.display = "none";
+          updateStatsBar();
+        } catch (err) {
+          alert("Failed to parse JSON: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // ---- Navigation ----
+    function currentCountry() { return countries[countryIdx]; }
+    function currentRecords() { return allData[currentCountry()] || []; }
+    function currentRecord() { return currentRecords()[recordIdx]; }
+
+    function prevRecord() {
+      commitEdits();
+      if (recordIdx > 0) {
+        recordIdx--;
+      } else if (countryIdx > 0) {
+        countryIdx--;
+        recordIdx = currentRecords().length - 1;
+      }
+      showRecord();
+    }
+
+    function nextRecord() {
+      commitEdits();
+      if (recordIdx < currentRecords().length - 1) {
+        recordIdx++;
+      } else if (countryIdx < countries.length - 1) {
+        countryIdx++;
+        recordIdx = 0;
+      }
+      showRecord();
+    }
+
+    function prevCountry() {
+      commitEdits();
+      if (countryIdx > 0) {
+        countryIdx--;
+        recordIdx = 0;
+        showRecord();
+      }
+    }
+
+    function nextCountry() {
+      commitEdits();
+      if (countryIdx < countries.length - 1) {
+        countryIdx++;
+        recordIdx = 0;
+        showRecord();
+      }
+    }
+
+    function jumpToCountry() {
+      commitEdits();
+      const sel = document.getElementById("jump-country").value;
+      const idx = countries.indexOf(sel);
+      if (idx >= 0) {
+        countryIdx = idx;
+        recordIdx = 0;
+        showRecord();
+      }
+    }
+
+    function jumpToIndex() {
+      commitEdits();
+      const n = parseInt(document.getElementById("jump-index").value);
+      if (!isNaN(n) && n >= 1 && n <= currentRecords().length) {
+        recordIdx = n - 1;
+        showRecord();
+      }
+    }
+
+    function jumpToNextUnverified() {
+      commitEdits();
+      let ci = countryIdx, ri = recordIdx + 1;
+      for (let i = 0; i < totalRecords; i++) {
+        if (ri >= allData[countries[ci]].length) {
+          ci = (ci + 1) % countries.length;
+          ri = 0;
+        }
+        if (!allData[countries[ci]][ri].verified) {
+          countryIdx = ci;
+          recordIdx = ri;
+          showRecord();
+          return;
+        }
+        ri++;
+      }
+      alert("All records have been verified!");
+    }
+
+    // ---- Popup window management ----
+    function isWindowOpen(win) {
+      return win && !win.closed;
+    }
+
+    function getMapsUrl(lat, lng) {
+      if (lat != null && lng != null && lat !== "" && lng !== "") {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+      }
+      return null;
+    }
+
+    function openMapsWindow() {
+      const rec = currentRecord();
+      if (!rec) return;
+      const url = getMapsUrl(rec.latitude, rec.longitude);
+      if (!url) {
+        alert("No coordinates available for this record.");
+        return;
+      }
+      if (isWindowOpen(mapsWindow)) {
+        mapsWindow.location.href = url;
+        mapsWindow.focus();
+      } else {
+        mapsWindow = window.open(url, "webcam_review_maps", "width=900,height=700,left=100,top=100");
+      }
+      updateWindowStatuses();
+    }
+
+    function openWebcamWindow() {
+      const rec = currentRecord();
+      if (!rec || !rec.url) return;
+      if (isWindowOpen(webcamWindow)) {
+        webcamWindow.location.href = rec.url;
+        webcamWindow.focus();
+      } else {
+        webcamWindow = window.open(rec.url, "webcam_review_feed", "width=900,height=700,left=1020,top=100");
+      }
+      updateWindowStatuses();
+    }
+
+    function updateMapsFromFields() {
+      const lat = parseFloat(document.getElementById("field-lat").value);
+      const lng = parseFloat(document.getElementById("field-lng").value);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        const url = getMapsUrl(lat, lng);
+        if (url && isWindowOpen(mapsWindow)) {
+          mapsWindow.location.href = url;
+          mapsWindow.focus();
+        } else if (url) {
+          mapsWindow = window.open(url, "webcam_review_maps", "width=900,height=700,left=100,top=100");
+        }
+        updateWindowStatuses();
+      }
+    }
+
+    function autoUpdateWindows(rec) {
+      // Auto-update Google Maps if enabled and window is open
+      if (document.getElementById("maps-auto-update").checked && isWindowOpen(mapsWindow)) {
+        const url = getMapsUrl(rec.latitude, rec.longitude);
+        if (url) {
+          mapsWindow.location.href = url;
+        }
+      }
+
+      // Auto-update webcam if enabled and window is open
+      if (document.getElementById("webcam-auto-update").checked && isWindowOpen(webcamWindow)) {
+        if (rec.url) {
+          webcamWindow.location.href = rec.url;
+        }
+      }
+
+      updateWindowStatuses();
+    }
+
+    function updateWindowStatuses() {
+      const mapsDot = document.getElementById("maps-status-dot");
+      const mapsText = document.getElementById("maps-status-text");
+      if (isWindowOpen(mapsWindow)) {
+        mapsDot.className = "status-dot open";
+        mapsText.textContent = "Open";
+      } else {
+        mapsDot.className = "status-dot closed";
+        mapsText.textContent = "Closed";
+      }
+
+      const webcamDot = document.getElementById("webcam-status-dot");
+      const webcamText = document.getElementById("webcam-status-text");
+      if (isWindowOpen(webcamWindow)) {
+        webcamDot.className = "status-dot open";
+        webcamText.textContent = "Open";
+      } else {
+        webcamDot.className = "status-dot closed";
+        webcamText.textContent = "Closed";
+      }
+    }
+
+    // Periodically check if windows are still open
+    setInterval(updateWindowStatuses, 2000);
+
+    // ---- Display ----
+    function showRecord() {
+      const rec = currentRecord();
+      if (!rec) return;
+
+      // Country & counter
+      document.getElementById("country-name").textContent = currentCountry();
+      document.getElementById("record-counter").textContent =
+        `${recordIdx + 1} / ${currentRecords().length}`;
+
+      // Fields
+      document.getElementById("field-title").value = rec.title || "";
+      document.getElementById("field-subtitle").value = rec.subtitle || "";
+      document.getElementById("field-radius").value = rec.radius ?? "";
+      document.getElementById("field-lat").value = rec.latitude ?? "";
+      document.getElementById("field-lng").value = rec.longitude ?? "";
+      document.getElementById("field-url").value = rec.url || "";
+      document.getElementById("field-mode").value = rec.mode || "automatic";
+
+      // Badges
+      const modeBadge = document.getElementById("mode-badge");
+      modeBadge.textContent = rec.mode || "—";
+      modeBadge.className = "badge stat-pill " +
+        (rec.mode === "automatic" ? "badge-auto" : "badge-manual");
+
+      const verBadge = document.getElementById("verified-badge");
+      verBadge.textContent = rec.verified ? "Verified" : "Unverified";
+      verBadge.className = "badge stat-pill " +
+        (rec.verified ? "badge-verified" : "badge-unverified");
+
+      // Union words
+      const union = getUnionWords(rec.title || "", rec.subtitle || "");
+      document.getElementById("union-words-text").textContent = union || "(no common words)";
+
+      // Update URL displays
+      const mapsUrl = getMapsUrl(rec.latitude, rec.longitude);
+      document.getElementById("maps-current-url").textContent = mapsUrl || "No coordinates available";
+      document.getElementById("webcam-current-url").textContent = rec.url || "No URL";
+
+      // Auto-update popup windows
+      autoUpdateWindows(rec);
+
+      // Jump controls
+      document.getElementById("jump-country").value = currentCountry();
+      document.getElementById("jump-index").value = recordIdx + 1;
+
+      // Progress info
+      updateProgressInfo();
+      updateStatsBar();
+    }
+
+    function getUnionWords(title, subtitle) {
+      const clean = (text) => {
+        return text.toLowerCase()
+          .replace(/[-–—]/g, " ")
+          .split(/\s+/)
+          .filter(w => w && !STOPWORDS.has(w));
+      };
+      const t1 = new Set(clean(title));
+      const t2 = new Set(clean(subtitle));
+      const common = [...t1].filter(w => t2.has(w));
+      return common.join(" ");
+    }
+
+    // ---- Editing ----
+    function commitEdits() {
+      const rec = currentRecord();
+      if (!rec) return;
+      rec.title = document.getElementById("field-title").value;
+      rec.subtitle = document.getElementById("field-subtitle").value;
+      rec.url = document.getElementById("field-url").value;
+      rec.mode = document.getElementById("field-mode").value;
+
+      const radius = document.getElementById("field-radius").value;
+      rec.radius = radius === "" ? null : Number(radius);
+
+      const lat = document.getElementById("field-lat").value;
+      rec.latitude = lat === "" ? null : Number(lat);
+
+      const lng = document.getElementById("field-lng").value;
+      rec.longitude = lng === "" ? null : Number(lng);
+    }
+
+    function verifyRecord() {
+      const rec = currentRecord();
+      if (!rec) return;
+      rec.verified = true;
+      const verBadge = document.getElementById("verified-badge");
+      verBadge.textContent = "Verified";
+      verBadge.className = "badge stat-pill badge-verified";
+      updateStatsBar();
+    }
+
+    function unverifyRecord() {
+      const rec = currentRecord();
+      if (!rec) return;
+      rec.verified = false;
+      const verBadge = document.getElementById("verified-badge");
+      verBadge.textContent = "Unverified";
+      verBadge.className = "badge stat-pill badge-unverified";
+      updateStatsBar();
+    }
+
+    function saveAll() {
+      commitEdits();
+      const json = JSON.stringify(allData, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "skyline_webcams_final.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // Brief visual feedback
+      });
+    }
+
+    function copyCoords() {
+      const lat = document.getElementById("field-lat").value;
+      const lng = document.getElementById("field-lng").value;
+      if (lat && lng) {
+        copyText(`${lat}, ${lng}`);
+      }
+    }
+
+    // ---- Stats ----
+    function updateStatsBar() {
+      let verified = 0;
+      for (const c of countries) {
+        for (const r of allData[c]) {
+          if (r.verified) verified++;
+        }
+      }
+      document.getElementById("stats-bar").textContent =
+        `${verified} / ${totalRecords} verified (${Math.round(verified / totalRecords * 100)}%)`;
+    }
+
+    function updateProgressInfo() {
+      let flat = 0;
+      for (let i = 0; i < countryIdx; i++) {
+        flat += allData[countries[i]].length;
+      }
+      flat += recordIdx + 1;
+      document.getElementById("progress-info").textContent =
+        `Record ${flat} of ${totalRecords} overall | Country ${countryIdx + 1} of ${countries.length}`;
+    }
+
+    function populateJumpCountry() {
+      const sel = document.getElementById("jump-country");
+      sel.innerHTML = "";
+      for (const c of countries) {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = `${c} (${allData[c].length})`;
+        sel.appendChild(opt);
+      }
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+      if (e.key === "ArrowLeft") { prevRecord(); e.preventDefault(); }
+      if (e.key === "ArrowRight") { nextRecord(); e.preventDefault(); }
+      if (e.key === "v") { verifyRecord(); e.preventDefault(); }
+    });
+  </script>
+</body>
+
+</html>
