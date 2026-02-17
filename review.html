@@ -105,7 +105,16 @@
       max-height: 2.4em;
       overflow: hidden;
     }
+
+    #search-results-info {
+      font-size: 0.85rem;
+      margin-top: 5px;
+      color: #198754;
+      font-weight: 500;
+    }
   </style>
+  <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyC0ZE5O5GKBfvfir45zWNYRb5Q-bSGBuyE&libraries=places&callback=initMap"></script>
 </head>
 
 <body>
@@ -168,6 +177,16 @@
               <div class="col-4">
                 <label class="field-label">Radius (m)</label>
                 <input type="number" class="form-control form-control-sm" id="field-radius">
+                <div class="d-flex gap-1 mt-1">
+                  <button class="btn btn-outline-secondary btn-sm p-0 px-1" style="font-size: 0.7rem;"
+                    onclick="document.getElementById('field-radius').value=10; commitEdits();">10</button>
+                  <button class="btn btn-outline-secondary btn-sm p-0 px-1" style="font-size: 0.7rem;"
+                    onclick="document.getElementById('field-radius').value=50; commitEdits();">50</button>
+                  <button class="btn btn-outline-secondary btn-sm p-0 px-1" style="font-size: 0.7rem;"
+                    onclick="document.getElementById('field-radius').value=100; commitEdits();">100</button>
+                  <button class="btn btn-outline-secondary btn-sm p-0 px-1" style="font-size: 0.7rem;"
+                    onclick="document.getElementById('field-radius').value=200; commitEdits();">200</button>
+                </div>
               </div>
               <div class="col">
                 <label class="field-label">Latitude</label>
@@ -181,6 +200,12 @@
                 <button class="btn btn-outline-secondary btn-sm" onclick="copyCoords()" title="Copy lat, lng"><i
                     class="bi bi-clipboard"></i></button>
               </div>
+            </div>
+
+            <div class="mb-2">
+              <label class="field-label">Paste Coordinates</label>
+              <input type="text" class="form-control form-control-sm" id="field-paste-coords"
+                placeholder="lat, long (e.g. 51.5074, -0.1278)">
             </div>
 
             <div class="mb-2">
@@ -218,6 +243,9 @@
                   class="bi bi-check-circle"></i> Verify</button>
               <button class="btn btn-danger btn-sm flex-fill" onclick="unverifyRecord()"><i class="bi bi-x-circle"></i>
                 Unverify</button>
+              <button class="btn btn-outline-danger btn-sm"
+                onclick="if(confirm('Are you sure you want to delete this record?')) deleteRecord()"
+                title="Delete Record"><i class="bi bi-trash"></i></button>
             </div>
             <div class="d-flex gap-2 mt-2">
               <button class="btn btn-primary flex-fill" onclick="saveAll()"><i class="bi bi-download"></i> Save
@@ -291,6 +319,27 @@
                 </div>
               </div>
               <div class="window-url" id="webcam-current-url">No URL loaded</div>
+            </div>
+          </div>
+
+          <!-- Embedded Map Preview -->
+          <div class="col-12">
+            <div class="window-panel">
+              <!-- Search Box -->
+              <div class="mb-3">
+                <label class="field-label mb-1"><i class="bi bi-search"></i> Search Location</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" class="form-control" id="map-search-input" placeholder="Enter location..."
+                    onkeydown="if(event.key==='Enter') searchLocation()">
+                  <button class="btn btn-outline-primary" onclick="searchLocation()">Search</button>
+                </div>
+                <div id="search-results-info"></div>
+              </div>
+
+              <label class="field-label mb-2"><i class="bi bi-map-fill text-warning"></i> Satellite Preview</label>
+              <div class="ratio ratio-16x9">
+                <iframe id="embedded-map" style="border:0" loading="lazy" allowfullscreen></iframe>
+              </div>
             </div>
           </div>
 
@@ -455,6 +504,15 @@
       return null;
     }
 
+    function navigateMapsWindow(url) {
+      // Google Maps blocks cross-origin location.href reassignment,
+      // so we must close and reopen the window to navigate reliably.
+      if (isWindowOpen(mapsWindow)) {
+        mapsWindow.close();
+      }
+      mapsWindow = window.open(url, "webcam_review_maps", "width=900,height=700,left=100,top=100");
+    }
+
     function openMapsWindow() {
       const rec = currentRecord();
       if (!rec) return;
@@ -463,12 +521,7 @@
         alert("No coordinates available for this record.");
         return;
       }
-      if (isWindowOpen(mapsWindow)) {
-        mapsWindow.location.href = url;
-        mapsWindow.focus();
-      } else {
-        mapsWindow = window.open(url, "webcam_review_maps", "width=900,height=700,left=100,top=100");
-      }
+      navigateMapsWindow(url);
       updateWindowStatuses();
     }
 
@@ -489,13 +542,11 @@
       const lng = parseFloat(document.getElementById("field-lng").value);
       if (!isNaN(lat) && !isNaN(lng)) {
         const url = getMapsUrl(lat, lng);
-        if (url && isWindowOpen(mapsWindow)) {
-          mapsWindow.location.href = url;
-          mapsWindow.focus();
-        } else if (url) {
-          mapsWindow = window.open(url, "webcam_review_maps", "width=900,height=700,left=100,top=100");
+        if (url) {
+          navigateMapsWindow(url);
         }
         updateWindowStatuses();
+        updateEmbeddedMap({ latitude: lat, longitude: lng });
       }
     }
 
@@ -504,7 +555,7 @@
       if (document.getElementById("maps-auto-update").checked && isWindowOpen(mapsWindow)) {
         const url = getMapsUrl(rec.latitude, rec.longitude);
         if (url) {
-          mapsWindow.location.href = url;
+          navigateMapsWindow(url);
         }
       }
 
@@ -540,8 +591,83 @@
       }
     }
 
+
     // Periodically check if windows are still open
     setInterval(updateWindowStatuses, 2000);
+
+    function updateEmbeddedMap(rec) {
+      if (rec && rec.latitude != null && rec.longitude != null && rec.latitude !== "" && rec.longitude !== "") {
+        const iframe = document.getElementById("embedded-map");
+        // t=k (satellite), z=19 (zoom), output=embed
+        iframe.src = `https://maps.google.com/maps?q=${rec.latitude},${rec.longitude}&t=k&z=19&ie=UTF8&iwloc=&output=embed`;
+      } else {
+        const iframe = document.getElementById("embedded-map");
+        if (iframe) iframe.src = "about:blank";
+      }
+    }
+
+    // ---- Google Maps API Search ----
+    let placesService;
+    // We need a dummy div for PlacesService to anchor to, though we won't show it.
+    let dummyMapDiv;
+
+    function initMap() {
+      dummyMapDiv = document.createElement("div");
+      // Create a map instance (even if not shown) or just use the div if API allows
+      // standardized way: create a map or just pass the div
+      // But PlacesService constructor requires a Map or HTMLDivElement
+      // If we pass a div, it works for some requests like findPlaceFromQuery.
+      // Let's create a lightweight map instance if needed, or try with div first.
+      // Actually standard JS API usually requires a map for full visuals, but for data fetch
+      // we can try passing a div.
+      const map = new google.maps.Map(dummyMapDiv, { center: { lat: 0, lng: 0 }, zoom: 1 });
+      placesService = new google.maps.places.PlacesService(map);
+    }
+
+    function searchLocation() {
+      const query = document.getElementById("map-search-input").value.trim();
+      const infoDiv = document.getElementById("search-results-info");
+      infoDiv.textContent = "";
+
+      if (!query) return;
+      if (!placesService) {
+        alert("Google Maps API not loaded yet.");
+        return;
+      }
+
+      const request = {
+        query: query,
+        fields: ['name', 'geometry', 'formatted_address']
+      };
+
+      placesService.findPlaceFromQuery(request, (results, status) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results && results.length > 0) {
+          const place = results[0];
+          const loc = place.geometry.location;
+          const lat = loc.lat();
+          const lng = loc.lng();
+
+          // Update fields
+          document.getElementById("field-lat").value = lat;
+          document.getElementById("field-lng").value = lng;
+
+          // Update UI
+          infoDiv.textContent = `Found: ${place.name} (${place.formatted_address})`;
+
+          // Commit to data record locally so it persists if we navigate away
+          commitEdits();
+
+          // Update maps
+          if (isWindowOpen(mapsWindow)) updateMapsFromFields();
+          updateEmbeddedMap({ latitude: lat, longitude: lng });
+
+        } else {
+          infoDiv.textContent = "No results found.";
+          infoDiv.style.color = "#dc3545";
+          setTimeout(() => { infoDiv.style.color = "#198754"; infoDiv.textContent = ""; }, 3000);
+        }
+      });
+    }
 
     // ---- Display ----
     function showRecord() {
@@ -584,6 +710,7 @@
 
       // Auto-update popup windows
       autoUpdateWindows(rec);
+      updateEmbeddedMap(rec);
 
       // Jump controls
       document.getElementById("jump-country").value = currentCountry();
@@ -630,10 +757,7 @@
       const rec = currentRecord();
       if (!rec) return;
       rec.verified = true;
-      const verBadge = document.getElementById("verified-badge");
-      verBadge.textContent = "Verified";
-      verBadge.className = "badge stat-pill badge-verified";
-      updateStatsBar();
+      nextRecord();
     }
 
     function unverifyRecord() {
@@ -713,7 +837,83 @@
       if (e.key === "ArrowLeft") { prevRecord(); e.preventDefault(); }
       if (e.key === "ArrowRight") { nextRecord(); e.preventDefault(); }
       if (e.key === "v") { verifyRecord(); e.preventDefault(); }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (confirm("Delete this record?")) {
+          deleteRecord();
+          e.preventDefault();
+        }
+      }
     });
+
+    // Paste coordinates handler
+    document.getElementById("field-paste-coords").addEventListener("input", (e) => {
+      const text = e.target.value.trim();
+      // Try to split by comma first
+      let parts = text.split(",");
+      if (parts.length === 2) {
+        const lat = parseFloat(parts[0].trim());
+        const lng = parseFloat(parts[1].trim());
+        if (!isNaN(lat) && !isNaN(lng)) {
+          document.getElementById("field-lat").value = lat;
+          document.getElementById("field-lng").value = lng;
+          if (isWindowOpen(mapsWindow)) updateMapsFromFields();
+          e.target.value = ""; // Clear on success
+          return;
+        }
+      }
+
+      // Fallback: try splitting by space if no comma
+      parts = text.split(/\s+/);
+      if (parts.length === 2) {
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          document.getElementById("field-lat").value = lat;
+          document.getElementById("field-lng").value = lng;
+          if (isWindowOpen(mapsWindow)) updateMapsFromFields();
+          e.target.value = "";
+        }
+      }
+    });
+
+    function deleteRecord() {
+      const country = currentCountry();
+      if (!country) return;
+
+      const records = allData[country];
+      // remove current record
+      records.splice(recordIdx, 1);
+      totalRecords--;
+
+      // if no records left in this country, remove the country key
+      if (records.length === 0) {
+        delete allData[country];
+        countries = Object.keys(allData);
+        // if we have other countries, stay at same countryIdx (which now points to next country)
+        // or decrement if we were at the end
+        if (countryIdx >= countries.length) {
+          countryIdx = Math.max(0, countries.length - 1);
+        }
+        recordIdx = 0;
+      } else {
+        // if records remain, we just need to make sure recordIdx is valid
+        if (recordIdx >= records.length) {
+          recordIdx = Math.max(0, records.length - 1);
+        }
+      }
+
+      // Check if we have any data left at all
+      if (countries.length === 0) {
+        alert("All records deleted!");
+        document.getElementById("app").style.display = "none";
+        document.getElementById("no-file").style.display = "";
+        return;
+      }
+
+      populateJumpCountry();
+      showRecord();
+      updateStatsBar();
+    }
   </script>
 </body>
 
